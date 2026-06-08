@@ -1,0 +1,1216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft como Simulador de Circuitos Lógicos</title>
+    <meta name="description" content="Evaluación de entornos virtuales de gamificación (Minecraft) como simuladores escalables para el diseño de circuitos lógicos combinacionales y secuenciales.">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════════════════
+           MINECRAFT THEME - CSS DESIGN SYSTEM
+           ═══════════════════════════════════════════════════════ */
+        :root {
+            /* Minecraft palette */
+            --mc-grass-top: #5D9B37;
+            --mc-grass-side: #6B8C42;
+            --mc-dirt: #8B6740;
+            --mc-dirt-dark: #6B4F30;
+            --mc-stone: #7F7F7F;
+            --mc-stone-dark: #5A5A5A;
+            --mc-redstone: #FF1111;
+            --mc-redstone-glow: rgba(255, 17, 17, 0.5);
+            --mc-obsidian: #1A1028;
+            --mc-deepslate: #333338;
+            --mc-endstone: #DBCB78;
+            --mc-diamond: #2ED8D8;
+            --mc-gold: #FCDB05;
+            --mc-emerald: #17DD62;
+            --mc-lapis: #3459D4;
+
+            /* UI Colors */
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-card: rgba(26, 16, 40, 0.85);
+            --text-primary: #e8e8e8;
+            --text-secondary: #a0a0b0;
+            --border-pixel: #3a3a4a;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html { font-size: 16px; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Crect x='4' y='4' width='16' height='16' fill='%23555' stroke='%23222' stroke-width='2'/%3E%3Crect x='8' y='8' width='8' height='8' fill='%23888'/%3E%3C/svg%3E") 12 12, auto;
+        }
+
+        /* ── Animated Pixel Grid Background ────────────────────── */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 32px 32px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Floating Redstone Particles ────────────────────── */
+        .particles {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--mc-redstone);
+            box-shadow: 0 0 6px var(--mc-redstone-glow);
+            animation: floatParticle linear infinite;
+            image-rendering: pixelated;
+        }
+
+        @keyframes floatParticle {
+            0% { transform: translateY(100vh) scale(1); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-20px) scale(0.5); opacity: 0; }
+        }
+
+        /* ── Presentation Container ────────────────────────── */
+        .presentation-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── Slide ─────────────────────────────────────────── */
+        .slide {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 3rem 2rem 5rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+            transform: translateX(60px);
+        }
+        .slide.active {
+            opacity: 1;
+            pointer-events: all;
+            z-index: 10;
+            transform: translateX(0);
+        }
+        .slide.prev {
+            transform: translateX(-60px);
+        }
+
+        /* ── Minecraft-style Card (Inventory Panel) ────────── */
+        .mc-card {
+            background: var(--bg-card);
+            border: 4px solid var(--border-pixel);
+            border-top-color: #5a5a6a;
+            border-left-color: #5a5a6a;
+            border-right-color: #2a2a3a;
+            border-bottom-color: #2a2a3a;
+            padding: 2.5rem;
+            max-width: 1050px;
+            width: 100%;
+            max-height: 82vh;
+            overflow-y: auto;
+            position: relative;
+            image-rendering: pixelated;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6), inset 0 0 80px rgba(0,0,0,0.15);
+        }
+        .mc-card::-webkit-scrollbar { width: 10px; }
+        .mc-card::-webkit-scrollbar-track { background: #1a1a2e; border-left: 2px solid var(--border-pixel); }
+        .mc-card::-webkit-scrollbar-thumb {
+            background: var(--mc-stone-dark);
+            border: 2px solid var(--border-pixel);
+        }
+
+        /* ── Grass Block Top Border ────────────────────────── */
+        .grass-top {
+            position: absolute;
+            top: -8px; left: -4px; right: -4px;
+            height: 8px;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--mc-grass-top) 0px, var(--mc-grass-top) 16px,
+                #4E8A2E 16px, #4E8A2E 32px
+            );
+            image-rendering: pixelated;
+        }
+
+        /* ── Typography ────────────────────────────────────── */
+        .mc-title {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 1.6rem;
+            color: #ffffff;
+            text-shadow: 3px 3px 0px #3a3a3a, 0 0 20px var(--mc-redstone-glow);
+            margin-bottom: 1.5rem;
+            line-height: 1.6;
+            letter-spacing: 1px;
+        }
+
+        .mc-subtitle {
+            font-family: 'VT323', monospace;
+            font-size: 1.8rem;
+            color: var(--mc-gold);
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 0px rgba(0,0,0,0.5);
+        }
+
+        .mc-heading {
+            font-family: 'VT323', monospace;
+            font-size: 1.6rem;
+            color: var(--mc-emerald);
+            margin-bottom: 0.75rem;
+            text-shadow: 1px 1px 0px rgba(0,0,0,0.5);
+        }
+
+        p, li {
+            font-size: 1.05rem;
+            line-height: 1.7;
+            margin-bottom: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        ul { padding-left: 1.5rem; margin-bottom: 1.2rem; }
+        li::marker { color: var(--mc-redstone); }
+
+        /* ── Highlight Tag (Redstone Glow) ─────────────────── */
+        .rs {
+            color: #fff;
+            font-weight: 600;
+            background: rgba(255, 17, 17, 0.15);
+            border-bottom: 2px solid var(--mc-redstone);
+            padding: 0.1rem 0.35rem;
+        }
+
+        .diamond {
+            color: var(--mc-diamond);
+            font-weight: 600;
+        }
+
+        .gold {
+            color: var(--mc-gold);
+            font-weight: 600;
+        }
+
+        .emerald {
+            color: var(--mc-emerald);
+            font-weight: 600;
+        }
+
+        /* ── Block-style Info Panels ───────────────────────── */
+        .block-panel {
+            background: rgba(0,0,0,0.25);
+            border: 3px solid var(--border-pixel);
+            border-top-color: #4a4a5a;
+            border-left-color: #4a4a5a;
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        .block-panel.redstone { border-left: 4px solid var(--mc-redstone); }
+        .block-panel.emerald { border-left: 4px solid var(--mc-emerald); }
+        .block-panel.diamond { border-left: 4px solid var(--mc-diamond); }
+        .block-panel.gold { border-left: 4px solid var(--mc-gold); }
+        .block-panel.lapis { border-left: 4px solid var(--mc-lapis); }
+
+        /* ── Level Badge ──────────────────────────────────── */
+        .level-badge {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.65rem;
+            display: inline-block;
+            padding: 0.3rem 0.6rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: 1px;
+        }
+        .level-badge.lvl1 { background: var(--mc-emerald); color: #000; }
+        .level-badge.lvl2 { background: var(--mc-gold); color: #000; }
+        .level-badge.lvl3 { background: var(--mc-redstone); color: #fff; }
+
+        /* ── Grid Layouts ─────────────────────────────────── */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+
+        @media (max-width: 768px) {
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            .mc-title { font-size: 1rem; }
+            .mc-card { padding: 1.5rem; }
+            .slide { padding: 1rem 0.8rem 4rem; }
+        }
+
+        /* ── Minecraft Table ──────────────────────────────── */
+        .mc-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+            margin-top: 1rem;
+        }
+        .mc-table th {
+            background: rgba(255,255,255,0.06);
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            color: var(--mc-gold);
+            padding: 0.8rem;
+            text-align: left;
+            border-bottom: 3px solid var(--border-pixel);
+        }
+        .mc-table td {
+            padding: 0.75rem 0.8rem;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            vertical-align: top;
+        }
+        .mc-table tr:hover td { background: rgba(255,255,255,0.03); }
+
+        /* ── Quote Block ──────────────────────────────────── */
+        .mc-quote {
+            border-left: 4px solid var(--mc-redstone);
+            background: rgba(255, 17, 17, 0.05);
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+            font-style: italic;
+            font-size: 1.15rem;
+        }
+
+        /* ── Step Block ────────────────────────────────────── */
+        .step {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            align-items: flex-start;
+        }
+        .step-icon {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.6rem;
+            min-width: 32px;
+            height: 32px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: var(--mc-stone-dark);
+            border: 2px solid var(--border-pixel);
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .step p { margin-bottom: 0; }
+
+        /* ── Navigation Controls ──────────────────────────── */
+        .controls {
+            position: fixed;
+            bottom: 1.2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            z-index: 100;
+            background: var(--bg-card);
+            border: 3px solid var(--border-pixel);
+            border-top-color: #5a5a6a;
+            border-left-color: #5a5a6a;
+            padding: 0.5rem 1rem;
+            image-rendering: pixelated;
+        }
+
+        .mc-btn {
+            background: #4a4a5a;
+            border: 3px solid;
+            border-top-color: #6a6a7a;
+            border-left-color: #6a6a7a;
+            border-right-color: #2a2a3a;
+            border-bottom-color: #2a2a3a;
+            color: #fff;
+            font-family: 'VT323', monospace;
+            font-size: 1.4rem;
+            width: 40px;
+            height: 36px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.1s;
+            image-rendering: pixelated;
+        }
+        .mc-btn:hover {
+            background: #5a5a6a;
+            color: var(--mc-gold);
+        }
+        .mc-btn:active {
+            border-top-color: #2a2a3a;
+            border-left-color: #2a2a3a;
+            border-right-color: #6a6a7a;
+            border-bottom-color: #6a6a7a;
+        }
+        .mc-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .progress-track {
+            width: 200px;
+            height: 10px;
+            background: #1a1a2e;
+            border: 2px solid var(--border-pixel);
+            position: relative;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--mc-redstone);
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 8px var(--mc-redstone-glow);
+        }
+
+        .slide-counter {
+            font-family: 'VT323', monospace;
+            font-size: 1.3rem;
+            color: var(--mc-endstone);
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* ── Keyboard Hint ────────────────────────────────── */
+        .key-hint {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 100;
+            font-family: 'VT323', monospace;
+            font-size: 1rem;
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+        .key-hint span {
+            background: #333;
+            border: 2px solid #555;
+            border-bottom-color: #222;
+            padding: 0.1rem 0.5rem;
+            margin: 0 0.15rem;
+        }
+
+        /* ── Animations ───────────────────────────────────── */
+        .fade-in-up {
+            animation: fadeInUp 0.6s ease forwards;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .slide.active .mc-card > * {
+            animation: fadeInUp 0.5s ease forwards;
+            opacity: 0;
+        }
+        .slide.active .mc-card > *:nth-child(1) { animation-delay: 0.1s; }
+        .slide.active .mc-card > *:nth-child(2) { animation-delay: 0.2s; }
+        .slide.active .mc-card > *:nth-child(3) { animation-delay: 0.3s; }
+        .slide.active .mc-card > *:nth-child(4) { animation-delay: 0.35s; }
+        .slide.active .mc-card > *:nth-child(5) { animation-delay: 0.4s; }
+        .slide.active .mc-card > *:nth-child(6) { animation-delay: 0.45s; }
+        .slide.active .mc-card > *:nth-child(7) { animation-delay: 0.5s; }
+        .slide.active .mc-card > *:nth-child(8) { animation-delay: 0.55s; }
+        .slide.active .mc-card > *:nth-child(9) { animation-delay: 0.6s; }
+        .slide.active .mc-card > *:nth-child(10) { animation-delay: 0.65s; }
+
+        /* ── Torch Glow Divider ────────────────────────────── */
+        .torch-divider {
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--mc-redstone), transparent);
+            margin: 1.5rem 0;
+            box-shadow: 0 0 12px var(--mc-redstone-glow);
+        }
+
+        /* ── Author chip ──────────────────────────────────── */
+        .author-chip {
+            display: inline-block;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid var(--border-pixel);
+            padding: 0.4rem 1rem;
+            margin: 0.3rem;
+            font-family: 'VT323', monospace;
+            font-size: 1.2rem;
+            color: #fff;
+        }
+
+        /* ── Section Tag ──────────────────────────────────── */
+        .section-tag {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.55rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--mc-stone);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Redstone Particles Background -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Keyboard Hint -->
+    <div class="key-hint">
+        <span>←</span> <span>→</span> Navegar
+    </div>
+
+    <div class="presentation-container" id="presentation">
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 1 — PORTADA
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-1">
+            <div class="mc-card" style="text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 55vh;">
+                <div class="grass-top"></div>
+                <span class="section-tag">Proyecto Final · Diseño Lógico Digital</span>
+                <h1 class="mc-title" style="font-size: 1.3rem; margin-top: 1rem;">Evaluación de Minecraft como Simulador Escalable</h1>
+                <p style="font-size: 1.25rem; color: var(--mc-endstone); margin-top: 0.5rem;">
+                    Para el diseño de circuitos lógicos combinacionales y secuenciales
+                </p>
+                <div class="torch-divider"></div>
+                <div style="margin-top: 1rem;">
+                    <span class="author-chip">Jeremy De la Cruz Collao</span>
+                    <span class="author-chip">Naomi S. Quiroz Bellido</span>
+                    <span class="author-chip">Manuel F. Jara Nieto</span>
+                    <span class="author-chip">Maria G. Gonzales Arias</span>
+                </div>
+                <div style="margin-top: 2rem; display: flex; justify-content: center; gap: 2rem;">
+                    <div>
+                        <span class="section-tag">Facultad</span>
+                        <p style="font-family: 'VT323', monospace; font-size: 1.3rem; color: var(--mc-diamond);">Ciencias Empresariales</p>
+                    </div>
+                    <div>
+                        <span class="section-tag">Curso</span>
+                        <p style="font-family: 'VT323', monospace; font-size: 1.3rem; color: var(--mc-diamond);">Diseño Lógico Digital y Arq. de Computadoras</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 2 — INTRODUCCIÓN: CONTEXTO GENERAL
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-2">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Introducción</span>
+                <h2 class="mc-subtitle">Contextualización: Evolución de los entornos virtuales y diseño digital</h2>
+                <p>El diseño de sistemas digitales y la organización de las computadoras son los <span class="rs">pilares de la informática y la ingeniería actual</span>. El corazón de la tecnología moderna consiste en convertir operaciones matemáticas abstractas (<span class="diamond">álgebra de Boole</span>) en circuitos reales mediante compuertas lógicas <sup>[1]</sup>.</p>
+                <p>Para crear aparatos digitales se necesitan métodos que permitan controlar dos tipos de circuitos:</p>
+                <div class="grid-2">
+                    <div class="block-panel emerald">
+                        <span class="mc-heading">Circuitos Combinacionales</span>
+                        <p>Responden al instante según las entradas conectadas en ese momento. No poseen memoria interna. Ejemplo: Multiplexores, Decodificadores.</p>
+                    </div>
+                    <div class="block-panel gold">
+                        <span class="mc-heading">Circuitos Secuenciales</span>
+                        <p>Son capaces de <span class="rs">recordar datos</span> y guardar información en una memoria interna que trabaja a un ritmo exacto y sincronizado. Ejemplo: Flip-Flops, Contadores.</p>
+                    </div>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.5rem;">
+                    <sup>[1]</sup> Floyd (2014), <sup>[2]</sup> Mano & Ciletti (2013)
+                </p>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 3 — PROBLEMA CON LABORATORIOS TRADICIONALES
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-3">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Introducción</span>
+                <h2 class="mc-subtitle">Limitaciones de los métodos tradicionales de enseñanza</h2>
+                <div class="block-panel redstone">
+                    <span class="mc-heading">Laboratorios Físicos (Breadboards)</span>
+                    <ul>
+                        <li>Es <span class="rs">muy difícil construir circuitos grandes</span>.</li>
+                        <li>Mantener los equipos es caro y los componentes se dañan constantemente.</li>
+                        <li>Los alumnos pierden tiempo resolviendo <span class="rs">fallas físicas de cables sueltos</span> en lugar de entender la lógica del circuito <sup>[4]</sup>.</li>
+                    </ul>
+                </div>
+                <div class="block-panel lapis">
+                    <span class="mc-heading">Simuladores 2D (Logisim / Multisim)</span>
+                    <ul>
+                        <li>Herramientas planas (2D), estáticas.</li>
+                        <li>No ofrecen la experiencia interactiva ni la visión en tres dimensiones.</li>
+                        <li>Los estudiantes necesitan desarrollar <span class="diamond">intuición espacial</span> que estas herramientas no proporcionan <sup>[3], [5]</sup>.</li>
+                    </ul>
+                </div>
+                <div class="block-panel emerald">
+                    <span class="mc-heading">La solución: Gamificación + Mundos Virtuales 3D</span>
+                    <p>En los últimos diez años, la unión entre el <span class="rs">aprendizaje basado en videojuegos</span> y los mundos virtuales modificables ha cambiado la educación científica: transforma ideas matemáticas en estructuras 3D probables mediante "ensayo y error", aumentando motivación y agilidad mental <sup>[6]</sup>.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 4 — TABLA COMPARATIVA
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-4">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Introducción</span>
+                <h2 class="mc-subtitle">Tabla I: Comparativa de entornos para lógica digital</h2>
+                <div style="overflow-x: auto;">
+                    <table class="mc-table">
+                        <thead>
+                            <tr>
+                                <th>Criterio</th>
+                                <th>Lab. Físicos (Breadboards)</th>
+                                <th>Simuladores 2D</th>
+                                <th>Minecraft (MVE)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Escalabilidad</strong></td>
+                                <td><span class="rs">Baja:</span> Limitada por dimensiones de la matriz de contactos y disponibilidad de CIs discretos.</td>
+                                <td><span class="gold">Alta:</span> Sujeta a la memoria del sistema y resolución del lienzo 2D.</td>
+                                <td><span class="emerald">Muy Alta / Masiva:</span> Estructura 3D modular basada en vóxeles; concurrencia masiva en servidores.</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Errores HW</strong></td>
+                                <td><span class="rs">Alta:</span> Falsos contactos, fatiga de materiales, cortocircuitos.</td>
+                                <td><span class="emerald">Nula:</span> Entornos ideales abstractos.</td>
+                                <td><span class="emerald">Nula:</span> Motor puramente lógico y determinista (vóxeles Redstone).</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Interactividad</strong></td>
+                                <td><span class="gold">Media:</span> Tangible pero sin dinámicas inmersivas.</td>
+                                <td><span class="rs">Baja:</span> Esquemas 2D estáticos, diagramáticos.</td>
+                                <td><span class="emerald">Alta / Inmersiva:</span> Perspectiva en primera persona en entorno 3D lúdico.</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Costos</strong></td>
+                                <td><span class="rs">Alto:</span> Renovación de consumibles y equipos.</td>
+                                <td><span class="emerald">Bajo:</span> Licencias o herramientas open source.</td>
+                                <td><span class="emerald">Bajo:</span> Licencia única; infraestructura de servidor compartido.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.8rem;">Fuentes: [2], [3], [4], [14]</p>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 5 — REDSTONE: CÓMO FUNCIONA
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-5">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Introducción</span>
+                <h2 class="mc-subtitle">¿Por qué Minecraft? El motor lógico Redstone</h2>
+                <p>Las reglas lógicas del juego se basan en bloques 3D que reaccionan entre sí siguiendo un patrón matemático. Esto hace que el juego sea <span class="rs">"Turing-completo"</span>: tiene la capacidad teórica de simular cualquier computadora <sup>[7]</sup>.</p>
+                <div class="grid-2" style="margin-top: 1rem;">
+                    <div class="block-panel redstone">
+                        <span class="mc-heading">Transmisión de Energía</span>
+                        <p>La Redstone transmite energía bloque por bloque. La fuerza se mide en <span class="rs">niveles del 0 al 15</span>; a medida que la señal se aleja de su origen se va debilitando, imitando exactamente cómo se pierde el voltaje en un cable real <sup>[8], [11]</sup>.</p>
+                    </div>
+                    <div class="block-panel redstone">
+                        <span class="mc-heading">Compuerta NOT (Antorcha Inversora)</span>
+                        <p>Las antorchas de Redstone invierten la señal: si les llega energía, se apagan; si no, se encienden. Esto funciona como una <span class="rs">compuerta NOT</span>, la pieza clave para construir cualquier circuito o fórmula matemática <sup>[7], [10]</sup>.</p>
+                    </div>
+                </div>
+                <div class="mc-quote">
+                    "Al no tener cables físicos que fallen por un mal contacto, los alumnos aprenden a encontrar y arregir errores en el diseño de forma más rápida y eficiente." — Carl Faust <sup>[8]</sup>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 6 — ANTECEDENTES
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-6">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Introducción</span>
+                <h2 class="mc-subtitle">Antecedentes: Investigaciones previas</h2>
+                <div class="block-panel diamond">
+                    <span class="mc-heading">Carl Faust (2024) <sup>[8]</sup></span>
+                    <p>Organizó prácticas de laboratorio dentro del juego para estudiantes de electrónica. Concluyó que separar la teoría del estrés de conectar cables mal en una mesa de trabajo real <span class="diamond">ayuda muchísimo</span> al aprendizaje.</p>
+                </div>
+                <div class="block-panel diamond">
+                    <span class="mc-heading">Katherine Starr (2019) <sup>[9]</sup></span>
+                    <p>Demostró que construir con bloques ayuda a los estudiantes a desarrollar <span class="diamond">pensamiento computacional</span> gracias a probar y corregir ideas mediante ensayo y error.</p>
+                </div>
+                <div class="block-panel diamond">
+                    <span class="mc-heading">Lee & Hou (2025) <sup>[12]</sup></span>
+                    <p>Crearon laberintos de acertijos lógicos en Minecraft Education. Descubrieron que los alumnos <span class="diamond">recuerdan mejor</span> lo aprendido porque el juego muestra retroalimentación visual instantánea.</p>
+                </div>
+                <div class="block-panel redstone" style="margin-top: 0.5rem;">
+                    <span class="mc-heading">Vacío Identificado</span>
+                    <p>La mayoría de investigaciones se enfocan solo en circuitos sencillos o en revisar si el entorno es divertido. <span class="rs">Falta un análisis con datos reales sobre la precisión del juego con el tiempo y su capacidad para soportar circuitos complejos</span> <sup>[4], [13]</sup>.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 7 — PLANTEAMIENTO DEL PROBLEMA (Parte 1)
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-7">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Planteamiento del Problema</span>
+                <h2 class="mc-subtitle">La fidelidad técnica del motor Redstone</h2>
+                <p>El núcleo del problema: ¿Pueden las reglas matemáticas exactas de la electrónica copiarse dentro de un juego hecho de bloques?</p>
+                <div class="grid-2" style="margin-top: 1rem;">
+                    <div class="block-panel emerald">
+                        <span class="mc-heading">Simuladores Profesionales</span>
+                        <p>Calculan el tiempo de forma <span class="emerald">continua y fluida</span>, usando fórmulas exactas sobre cómo se mueve la electricidad dentro de componentes reales <sup>[1], [2]</sup>.</p>
+                    </div>
+                    <div class="block-panel redstone">
+                        <span class="mc-heading">Motor Minecraft</span>
+                        <p>Calcula el estado de la Redstone de forma <span class="rs">pausada y paso a paso</span>, siguiendo un sistema de pulsos o "ticks". Un <span class="rs">Redstone Tick = 0.1 segundos</span>, millones de veces mayor que los nanosegundos de un componente real <sup>[4], [7], [14]</sup>.</p>
+                    </div>
+                </div>
+                <div class="torch-divider"></div>
+                <p>Cualquier cambio en el circuito introduce un <span class="rs">retraso artificial</span>. Este retraso es millones de veces mayor que las milmillonésimas de segundo (nanosegundos) que tarda en reaccionar un componente electrónico real <sup>[2], [3]</sup>.</p>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 8 — PLANTEAMIENTO DEL PROBLEMA (Parte 2)
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-8">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Planteamiento del Problema</span>
+                <h2 class="mc-subtitle">El desafío escala con la complejidad</h2>
+                <div class="block-panel emerald">
+                    <span class="level-badge lvl1">NIVEL 1</span>
+                    <p><strong>Circuitos sin memoria (Combinacionales):</strong> Solo debemos revisar que el resultado coincida con la teoría. El único efecto del retraso es que la luz de salida tarda un poco más en encenderse. La tarea es sencilla.</p>
+                </div>
+                <div class="block-panel gold">
+                    <span class="level-badge lvl2">NIVEL 2</span>
+                    <p><strong>Circuitos con memoria (Flip-Flops):</strong> Cambia por completo. Se necesita un control <span class="rs">sumamente estricto sobre el tiempo</span>. Si las señales no llegan en el momento exacto, pueden chocar entre sí (<span class="rs">condiciones de carrera</span>) o no mantenerse estables para guardar la información correctamente <sup>[1], [2]</sup>.</p>
+                </div>
+                <div class="block-panel redstone">
+                    <span class="level-badge lvl3">NIVEL 3</span>
+                    <p><strong>Sistemas conectados (Cadenas largas):</strong> Los cables de Redstone deben acomodarse en la cuadrícula de bloques. Conectar muchos componentes en cadena hace que <span class="rs">los retrasos se vayan sumando</span>, provocando glitches o estados de confusión donde la memoria se corrompe por completo <sup>[2], [3]</sup>.</p>
+                </div>
+                <div class="mc-quote" style="margin-top: 1rem;">
+                    <strong style="color: var(--mc-gold);">Pregunta de Investigación:</strong><br>
+                    ¿Tiene el motor de lógica de un videojuego en 3D la precisión técnica necesaria para simular sistemas digitales complejos sin que los retrasos acumulados de su reloj interno arruinen el comportamiento correcto de los circuitos?
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 9 — OBJETIVOS
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-9">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Objetivos del Estudio</span>
+                <h2 class="mc-subtitle">Objetivo Central</h2>
+                <p>Medir con datos reales si Minecraft funciona de manera <span class="rs">precisa y confiable</span> como un laboratorio virtual alternativo, desde circuitos sencillos hasta sistemas avanzados conectados entre sí.</p>
+                <div class="torch-divider"></div>
+                <h2 class="mc-subtitle" style="font-size: 1.5rem;">Metas Específicas</h2>
+                <div class="block-panel emerald">
+                    <span class="level-badge lvl1">OBJ 1 · NIVEL 1</span>
+                    <p><strong>Comprobar circuitos básicos:</strong> Construir las compuertas elementales (AND, OR, NOT) y Decodificadores dentro del juego. Asegurar que den <span class="emerald">exactamente los mismos resultados lógicos que los libros el 100% de las veces</span>.</p>
+                </div>
+                <div class="block-panel gold">
+                    <span class="level-badge lvl2">OBJ 2 · NIVEL 2</span>
+                    <p><strong>Evaluar la memoria básica:</strong> Crear Flip-Flops (tipo D o SR). Analizar si el juego logra <span class="gold">mantener la información guardada de forma segura y estable</span>, o si el dato se borra debido al ritmo de actualización del mundo virtual.</p>
+                </div>
+                <div class="block-panel redstone">
+                    <span class="level-badge lvl3">OBJ 3 · NIVEL 3</span>
+                    <p><strong>Crear un sistema integrado:</strong> Juntar las piezas de los niveles anteriores para construir un <span class="rs">Contador Binario</span> (motor necesario para un cronómetro). Demostración final de arquitectura compleja.</p>
+                </div>
+                <div class="block-panel lapis">
+                    <span class="level-badge" style="background: var(--mc-lapis); color: #fff;">OBJ 4 · MEDICIÓN</span>
+                    <p><strong>Medir el retraso del tiempo:</strong> Calcular exactamente cuánto tarda la señal en viajar a medida que el circuito se vuelve más largo y complicado, contando directamente los <span class="rs">Redstone Ticks (1 RT = 0.1s)</span>.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 10 — HIPÓTESIS
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-10">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Hipótesis</span>
+                <h2 class="mc-subtitle">Replicabilidad lógica y limitaciones temporales</h2>
+                <p>Tomando en cuenta que Minecraft funciona como una máquina totalmente predecible, donde los bloques reaccionan al mismo tiempo y bajo reglas fijas, proponemos:</p>
+                <div class="mc-quote">
+                    <p style="margin-bottom: 0.5rem;">El mundo tridimensional de bloques permite <span class="emerald">copiar a la perfección las reglas matemáticas</span> de la electrónica digital y <span class="emerald">guardar información en memoria de forma estable</span>, demostrando que es una plataforma útil para diseñar y probar circuitos avanzados.</p>
+                    <p style="margin-bottom: 0;"><strong>Sin embargo</strong>, esta utilidad tiene un <span class="rs">límite estricto con el tiempo</span>: la demora total del circuito aumentará a un ritmo constante y predecible a medida que el camino se vuelva más largo. Cada componente que agregamos <span class="rs">suma su propio retraso</span>, debido a cómo el reloj interno del juego (ticks) procesa la energía.</p>
+                </div>
+                <div class="torch-divider"></div>
+                <p style="text-align: center; color: var(--text-secondary); font-size: 0.95rem;">
+                    En resumen: <span class="emerald">Fidelidad lógica perfecta</span> + <span class="rs">Latencia lineal creciente</span>
+                </p>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 11 — JUSTIFICACIÓN (Parte 1)
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-11">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Justificación</span>
+                <h2 class="mc-subtitle">Minecraft frente a simuladores tradicionales de ingeniería</h2>
+                <p>Probar videojuegos educativos como simuladores se justifica por dos grandes razones:</p>
+                <div class="grid-2" style="margin-top: 1rem;">
+                    <div class="block-panel emerald">
+                        <span class="mc-heading">1. Superar fallas de laboratorios</span>
+                        <p>La necesidad de superar los límites de los laboratorios físicos: fallos de hardware, costos elevados y limitaciones de escalabilidad arquitectónica.</p>
+                    </div>
+                    <div class="block-panel diamond">
+                        <span class="mc-heading">2. Herramienta 3D barata y escalable</span>
+                        <p>Ofrecer a la ingeniería una herramienta en tres dimensiones que es barata y permite construir circuitos gigantescos sin gastar dinero real.</p>
+                    </div>
+                </div>
+                <p style="margin-top: 1rem;">Desde el punto de vista técnico, Minecraft <span class="rs">no es simplemente un juego</span>: funciona como un motor potente que procesa señales al mismo tiempo y ejecuta operaciones lógicas avanzadas en un entorno donde <span class="diamond">varios estudiantes pueden conectarse y trabajar juntos</span> en equipo <sup>[4], [14]</sup>.</p>
+                <p>Al construir en tres dimensiones, el diseñador se ve obligado a pensar <span class="emerald">creativamente cómo acomodar los bloques y distribuir los cables de Redstone</span> dentro de un espacio físico limitado <sup>[7], [12]</sup>.</p>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 12 — JUSTIFICACIÓN (Parte 2 - Fuentes)
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-12">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Justificación</span>
+                <h2 class="mc-subtitle">Marco Teórico: Dos pilares fundamentales</h2>
+                <div class="grid-2">
+                    <div class="block-panel gold">
+                        <span class="mc-heading">📚 Libros Clásicos</span>
+                        <p>Textos fundamentales de diseño digital:</p>
+                        <ul>
+                            <li><strong>Floyd</strong> <sup>[1]</sup>: Fundamentos de Sistemas Digitales</li>
+                            <li><strong>Mano & Ciletti</strong> <sup>[2]</sup>: Diseño Digital</li>
+                            <li><strong>Tocci</strong> <sup>[3]</sup>: Sistemas Digitales</li>
+                        </ul>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary);">Nos dan las fórmulas matemáticas, tiempos de reacción ideales y reglas de estabilidad.</p>
+                    </div>
+                    <div class="block-panel diamond">
+                        <span class="mc-heading">🔬 Tecnología de Vanguardia</span>
+                        <p>Artículos científicos modernos:</p>
+                        <ul>
+                            <li><strong>Cruz García et al.</strong> <sup>[4]</sup>: Gemelos digitales</li>
+                            <li><strong>Faust</strong> <sup>[8]</sup>: Laboratorios virtuales</li>
+                            <li><strong>Munir</strong> <sup>[14]</sup>: Velocidad en mundos de bloques</li>
+                        </ul>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary);">Analizan cómo se usa la lógica dentro de mundos virtuales.</p>
+                    </div>
+                </div>
+                <div class="block-panel redstone" style="margin-top: 1rem;">
+                    <span class="mc-heading">El Vacío Identificado</span>
+                    <p>Los libros asumen que la energía viaja de forma perfecta <sup>[1], [2]</sup>. Los estudios sobre videojuegos solo describen si el entorno es divertido o se quedan en circuitos simples <sup>[6], [13]</sup>. <span class="rs">Falta un puente de datos reales que una ambos mundos.</span></p>
+                    <p style="margin-bottom: 0;">Este estudio ofrece <span class="emerald">mediciones prácticas</span> que demuestren hasta dónde puede llegar el reloj interno del juego con circuitos avanzados con memoria.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 13 — METODOLOGÍA: DISEÑO EXPERIMENTAL
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-13">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Metodología</span>
+                <h2 class="mc-subtitle">Diseño Experimental: Arquitectura Progresiva</h2>
+                <p>Experimento dividido en tres niveles de dificultad para analizar paso a paso el "motor lógico" (Redstone) <sup>[4], [14]</sup>:</p>
+                <div class="block-panel emerald">
+                    <span class="level-badge lvl1">NIVEL 1</span>
+                    <span class="mc-heading">Lógica Combinacional Base</span>
+                    <p>Construir compuertas elementales (AND, OR, NOT) usando bloques, cableado de Redstone y antorchas. Después crear un <span class="emerald">Multiplexor</span> (selector de señales). Verificar que los resultados sean correctos el 100% comparándolos con las "tablas de verdad" de los libros <sup>[1], [2], [7], [11]</sup>.</p>
+                </div>
+                <div class="block-panel gold">
+                    <span class="level-badge lvl2">NIVEL 2</span>
+                    <span class="mc-heading">Lógica Secuencial Base</span>
+                    <p>Añadir el factor <span class="gold">tiempo</span>. Probar circuitos capaces de "recordar" un dato: <span class="gold">Flip-Flops (tipo D o SR)</span>. La señal regresa sobre sí misma (retroalimentación/feedback). Comprobar si el circuito guarda un estado de forma estable y determinar el tiempo mínimo de preparación <sup>[2], [3], [7], [14]</sup>.</p>
+                </div>
+                <div class="block-panel redstone">
+                    <span class="level-badge lvl3">NIVEL 3</span>
+                    <span class="mc-heading">Sistema Integrado: Contador Binario</span>
+                    <p>Fusionar los niveles anteriores para crear un <span class="rs">Contador Binario (cronómetro digital)</span>. Es la prueba de fuego definitiva: requiere que muchas señales se coordinen al mismo tiempo y viajen por caminos complejos. Medir matemáticamente el límite de "estrés" del juego <sup>[2], [3], [4], [14]</sup>.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 14 — CONFIGURACIÓN DEL ENTORNO
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-14">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Metodología</span>
+                <h2 class="mc-subtitle">Configuración del entorno: Minecraft Java Edition (Vanilla)</h2>
+                <div class="grid-2">
+                    <div class="block-panel diamond">
+                        <span class="mc-heading">🖥️ Servidor y Versión</span>
+                        <p>Versión <span class="diamond">Vanilla (sin mods)</span>. Servidor en la nube <strong>(Aternos)</strong> para separar el procesamiento de los circuitos de la potencia de la computadora del jugador. El servidor procesa los datos de forma constante <sup>[4], [14]</sup>.</p>
+                    </div>
+                    <div class="block-panel emerald">
+                        <span class="mc-heading">🗺️ Mundo Superplano</span>
+                        <p>Mapa geométricamente perfecto: <span class="emerald">sin montañas, árboles, ni agua</span>. Evitar que la computadora desperdicie recursos dibujando paisajes innecesarios; el procesador se enfoca exclusivamente en la lógica de los circuitos <sup>[7], [14]</sup>.</p>
+                    </div>
+                </div>
+                <h3 class="mc-heading" style="margin-top: 1.2rem;">Variables de Entorno Controladas</h3>
+                <div class="grid-3">
+                    <div class="block-panel gold">
+                        <span class="mc-heading" style="font-size: 1.3rem;">☀️ Ciclo Fijo</span>
+                        <p>Mediodía permanente. Evita cálculos de cambios de luz y sombras que generan lag <sup>[4]</sup>.</p>
+                    </div>
+                    <div class="block-panel lapis">
+                        <span class="mc-heading" style="font-size: 1.3rem;">🌧️ Sin Clima</span>
+                        <p>Ni lluvia ni nieve. Evita sobrecargar gráficos con partículas innecesarias <sup>[11]</sup>.</p>
+                    </div>
+                    <div class="block-panel emerald">
+                        <span class="mc-heading" style="font-size: 1.3rem;">🛡️ Modo Pacífico</span>
+                        <p>Sin monstruos. Protege circuitos y libera CPU de IA de enemigos <sup>[14]</sup>.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 15 — VARIABLES
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-15">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Metodología</span>
+                <h2 class="mc-subtitle">Definición y Operacionalización de Variables</h2>
+                <div class="block-panel gold">
+                    <span class="mc-heading">Variable Independiente: Complejidad de la Arquitectura Lógica</span>
+                    <p>Nivel de complejidad y tamaño del circuito. Se maneja manualmente avanzando a través de los tres niveles experimentales. A medida que pasamos de un nivel a otro, aumenta la <span class="gold">profundidad lógica</span> (el camino crítico que debe recorrer la señal) <sup>[1]</sup>.</p>
+                    <p style="margin-bottom: 0; font-size: 0.9rem;"><strong>Escala:</strong> Discreta (Nivel 1, 2, 3) · <strong>Instrumento:</strong> Diagramas lógicos de diseño estándar</p>
+                </div>
+                <div class="grid-2" style="margin-top: 1rem;">
+                    <div class="block-panel emerald">
+                        <span class="mc-heading">VD₁: Fidelidad Lógica (FL)</span>
+                        <p>Porcentaje de coincidencia entre las salidas virtuales (<strong>Y<sub>obs</sub></strong>) y las respuestas teóricas (<strong>Y<sub>teo</sub></strong>), tras probar todas las combinaciones posibles de palancas de entrada (<strong>X<sub>n</sub></strong>) <sup>[4], [11]</sup>.</p>
+                        <p style="margin-bottom: 0; font-size: 0.9rem;"><strong>Escala:</strong> 0% – 100% · <strong>Instrumento:</strong> Tablas de verdad teóricas vs. observadas</p>
+                    </div>
+                    <div class="block-panel redstone">
+                        <span class="mc-heading">VD₂: Retardo de Propagación (t<sub>pd</sub>)</span>
+                        <p>Tiempo desde que mueves una palanca hasta que la lámpara de salida en el <span class="rs">camino crítico</span> se estabiliza. Unidad: <span class="rs">Redstone Tick (RT)</span> donde 1 RT = 100 ms <sup>[1], [7], [14]</sup>.</p>
+                        <p style="margin-bottom: 0; font-size: 0.9rem;"><strong>Escala:</strong> Redstone Ticks · <strong>Instrumento:</strong> Cronogramas de simulación síncrona</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 16 — TABLA DE OPERACIONALIZACIÓN
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-16">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Metodología</span>
+                <h2 class="mc-subtitle">Tabla II: Matriz de operacionalización de variables</h2>
+                <div style="overflow-x: auto;">
+                    <table class="mc-table">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Variable</th>
+                                <th>Definición Operacional</th>
+                                <th>Unidad</th>
+                                <th>Instrumento</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="gold">Independiente</span></td>
+                                <td>Complejidad de la Arquitectura Lógica</td>
+                                <td>Grado de acoplamiento y profundidad del circuito por niveles (Combinacional → Secuencial → Integrado).</td>
+                                <td>Discreta (Nivel 1, 2, 3)</td>
+                                <td>Diagramas lógicos <sup>[2]</sup></td>
+                            </tr>
+                            <tr>
+                                <td><span class="emerald">Dependiente 1</span></td>
+                                <td>Fidelidad Lógica</td>
+                                <td>Grado de cumplimiento exacto de las funciones booleanas de salida.</td>
+                                <td>Porcentual (0% a 100%)</td>
+                                <td>Tablas de verdad <sup>[4]</sup></td>
+                            </tr>
+                            <tr>
+                                <td><span class="rs">Dependiente 2</span></td>
+                                <td>Retardo de Propagación</td>
+                                <td>Tiempo de latencia acumulado en la trayectoria crítica del circuito virtual.</td>
+                                <td>Redstone Ticks (RT)</td>
+                                <td>Cronogramas <sup>[14]</sup></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 17 — PROTOCOLO: MECANISMO DE INTERACCIÓN
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-17">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Metodología · Protocolo</span>
+                <h2 class="mc-subtitle">Mecanismo de Interacción: Entradas y Salidas</h2>
+                <p>Para comprobar que los circuitos funcionen igual que componentes electrónicos reales, se diseñó un <span class="rs">método de prueba manual y visual</span> dentro del juego <sup>[4], [10]</sup>.</p>
+                <div class="grid-2" style="margin-top: 1.2rem;">
+                    <div class="block-panel gold" style="text-align: center;">
+                        <span class="mc-heading">🔌 Entradas: Palancas</span>
+                        <p style="font-size: 1.1rem;"><strong>Palanca abajo</strong> → <span class="rs">"0" lógico</span> (sin energía)</p>
+                        <p style="font-size: 1.1rem; margin-bottom: 0;"><strong>Palanca arriba</strong> → <span class="emerald">"1" lógico</span> (con energía)</p>
+                    </div>
+                    <div class="block-panel gold" style="text-align: center;">
+                        <span class="mc-heading">💡 Salidas: Lámparas Redstone</span>
+                        <p style="font-size: 1.1rem;"><strong>Lámpara apagada</strong> → <span class="rs">Resultado "0"</span></p>
+                        <p style="font-size: 1.1rem; margin-bottom: 0;"><strong>Lámpara encendida</strong> → <span class="emerald">Resultado "1"</span></p>
+                    </div>
+                </div>
+                <div class="torch-divider"></div>
+                <p>Las variables de entrada se controlan mediante palancas al inicio de las conexiones. Las respuestas se conectan a lámparas de redstone <sup>[8]</sup>. El evaluador se sitúa frente a las palancas y realiza las acciones de forma organizada.</p>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 18 — PROTOCOLO NIVEL 1
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-18">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Metodología · Protocolo</span>
+                <h2 class="mc-subtitle">Procedimiento Nivel 1: Compuertas Lógicas</h2>
+                <p>Verificar compuertas básicas (AND, OR, NOT) y el Multiplexor recreando manualmente sus combinaciones lógicas paso a paso <sup>[2]</sup>:</p>
+                <div class="step">
+                    <div class="step-icon" style="background: var(--mc-emerald); color: #000;">A</div>
+                    <div>
+                        <p><strong>Posición inicial:</strong> Se colocan todas las palancas en la posición de apagado ("0") y se observa el estado de la lámpara de salida, anotando el resultado.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-icon" style="background: var(--mc-emerald); color: #000;">B</div>
+                    <div>
+                        <p><strong>Barrido de combinaciones:</strong> Se cambian las palancas una por una para cubrir todas las combinaciones posibles de la tabla de verdad (para 2 entradas: 00, 01, 10, 11) <sup>[1]</sup>.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-icon" style="background: var(--mc-emerald); color: #000;">C</div>
+                    <div>
+                        <p><strong>Registro:</strong> Tras cada cambio, se espera un instante para que la señal viaje por el camino de bloques y se registra el resultado final de la lámpara. Esto confirma si el simulador cumple con el <span class="emerald">100% de la teoría matemática</span> <sup>[4]</sup>.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 19 — PROTOCOLO NIVEL 2
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-19">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Metodología · Protocolo</span>
+                <h2 class="mc-subtitle">Procedimiento Nivel 2: Flip-Flop RS con Reloj</h2>
+                <p>Comprobar <span class="gold">retención de estado</span> y respuesta sincronizada al reloj. El circuito tiene 3 palancas: <strong>S</strong> (Set), <strong>R</strong> (Reset) y <strong>CLK</strong> (Clock). Salidas: lámparas <strong>Q</strong> y <strong>Q̄</strong> <sup>[1], [2], [3]</sup>.</p>
+                <div class="step">
+                    <div class="step-icon" style="background: var(--mc-gold); color: #000;">A</div>
+                    <div>
+                        <p><strong>Prueba de Sincronía:</strong> Con CLK en "0", se activan S y R en diferentes combinaciones. Si las lámparas <span class="gold">no cambian</span>, se demuestra que el circuito ignora las entradas sin permiso del reloj.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-icon" style="background: var(--mc-gold); color: #000;">B</div>
+                    <div>
+                        <p><strong>Prueba de Escritura:</strong> S=1, R=0. Se enciende y apaga rápidamente CLK. La lámpara Q debe <span class="emerald">encenderse</span> (guardó un "1").</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-icon" style="background: var(--mc-gold); color: #000;">C</div>
+                    <div>
+                        <p><strong>Prueba de Persistencia:</strong> Se apaga S (todas las entradas en "0"). La lámpara Q <span class="emerald">permanece encendida</span>. Demuestra que los bloques de Minecraft logran <span class="rs">"recordar" el último estado guardado</span> <sup>[14]</sup>.</p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-icon" style="background: var(--mc-gold); color: #000;">D</div>
+                    <div>
+                        <p><strong>Prueba de Reinicio:</strong> R=1, S=0. Se pulsa CLK. La lámpara Q <span class="rs">se apaga</span>, confirmando que el circuito borra la memoria correctamente bajo control del reloj <sup>[2]</sup>.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 20 — RESULTADOS (Placeholder)
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-20">
+            <div class="mc-card" style="text-align: center; display: flex; flex-direction: column; justify-content: center; min-height: 45vh;">
+                <div class="grass-top"></div>
+                <span class="section-tag">Resultados</span>
+                <h2 class="mc-subtitle">Resultados Experimentales</h2>
+                <div style="padding: 2rem; background: rgba(0,0,0,0.2); border: 3px dashed var(--border-pixel); margin-top: 1rem;">
+                    <p style="font-family: 'Press Start 2P', monospace; font-size: 0.8rem; color: var(--mc-gold); margin-bottom: 1rem;">⏳ EN PROGRESO</p>
+                    <p>Los datos experimentales de fidelidad lógica y tiempos de latencia se están recolectando actualmente. Esta sección presentará:</p>
+                    <div class="grid-2" style="margin-top: 1rem; text-align: left;">
+                        <div class="block-panel emerald">
+                            <p style="margin-bottom: 0;"><strong>Nivel 1:</strong> Validación de lógica combinacional (Compuertas base y Multiplexores).</p>
+                        </div>
+                        <div class="block-panel gold">
+                            <p style="margin-bottom: 0;"><strong>Nivel 2:</strong> Validación de lógica secuencial (Celdas de memoria y Flip-Flops).</p>
+                        </div>
+                        <div class="block-panel redstone">
+                            <p style="margin-bottom: 0;"><strong>Nivel 3:</strong> Sistema integrado (Contador binario).</p>
+                        </div>
+                        <div class="block-panel lapis">
+                            <p style="margin-bottom: 0;"><strong>Mediciones:</strong> Cuantificación del retardo de propagación (t<sub>pd</sub> en RT).</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════
+             SLIDE 21 — REFERENCIAS
+             ══════════════════════════════════════════════════════ -->
+        <section class="slide" id="slide-21">
+            <div class="mc-card">
+                <div class="grass-top"></div>
+                <span class="section-tag">Referencias</span>
+                <h2 class="mc-subtitle">Referencias Bibliográficas</h2>
+                <div style="font-size: 0.85rem; columns: 2; column-gap: 2rem;">
+                    <p>[1] T. L. Floyd, <em>Fundamentos de Sistemas Digitales</em>, 11.ª ed. Pearson, 2014.</p>
+                    <p>[2] M. M. Mano y M. D. Ciletti, <em>Diseño Digital</em>, 5.ª ed. Pearson Educación, 2013.</p>
+                    <p>[3] R. J. Tocci, N. S. Widmer y G. L. Moss, <em>Sistemas Digitales</em>, 11.ª ed. Pearson, 2011.</p>
+                    <p>[4] D. Cruz García et al., "Digital Twin for Designing Logic Gates in Minecraft…" <em>MDPI Applied Sciences</em>, 2026.</p>
+                    <p>[5] L. Prayaga et al., "An Exploration In The Use Of Minecraft…" <em>Int. J. IT, Eng. & Sci.</em>, 2016.</p>
+                    <p>[6] J. P. Bermudes-Mora y B. A. Naranjo-Sánchez, "Minecraft como herramienta educativa…" <em>Innova Research J.</em>, 2024.</p>
+                    <p>[7] S. Höltgen et al., "A Case of Toy Computing…" <em>Alternative Computing Paradigms</em>, 2021.</p>
+                    <p>[8] C. Faust, "Using a Minecraft virtual workspace…" <em>Am. J. Phys.</em>, 2024.</p>
+                    <p>[9] K. Starr, "Learning Computational Thinking with Minecraft," UNM, 2019.</p>
+                    <p>[10] A. Rouhiainen, "Construction of a digital logic workshop…" LUT, 2023.</p>
+                    <p>[11] R. R. Irsandy, "Aljabar Boolean Dalam Membangun Redstone…" ITB, 2019.</p>
+                    <p>[12] H.-M. Lee y H.-T. Hou, "Design and Preliminary Evaluation…" <em>SEACE2025</em>, 2025.</p>
+                    <p>[13] S. Nebel et al., "Mining Learning and Crafting…" <em>J. Educ. Tech. & Soc.</em>, 2016.</p>
+                    <p>[14] Z. Munir, "Design and Performance Evaluation…" Univ. Ciudad del Cabo, 2024.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════
+         NAVIGATION CONTROLS
+         ══════════════════════════════════════════════════════ -->
+    <div class="controls">
+        <button class="mc-btn" id="prevBtn" aria-label="Anterior">◀</button>
+        <div class="slide-counter"><span id="currentSlide">1</span> / <span id="totalSlides">21</span></div>
+        <div class="progress-track">
+            <div class="progress-fill" id="progressBar"></div>
+        </div>
+        <button class="mc-btn" id="nextBtn" aria-label="Siguiente">▶</button>
+    </div>
+
+    <script>
+        // ─── Redstone Floating Particles ──────────────────────
+        (function createParticles() {
+            const container = document.getElementById('particles');
+            const count = 25;
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.classList.add('particle');
+                p.style.left = Math.random() * 100 + '%';
+                p.style.width = (2 + Math.random() * 4) + 'px';
+                p.style.height = p.style.width;
+                p.style.animationDuration = (6 + Math.random() * 10) + 's';
+                p.style.animationDelay = (Math.random() * 8) + 's';
+                // Mix colors: redstone red, gold, some dim
+                const colors = ['#FF1111', '#FF3300', '#FF6600', '#FCDB05', '#FF1111'];
+                p.style.background = colors[Math.floor(Math.random() * colors.length)];
+                p.style.boxShadow = `0 0 ${4 + Math.random() * 6}px ${p.style.background}`;
+                container.appendChild(p);
+            }
+        })();
+
+        // ─── Slide Engine ─────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', () => {
+            const slides = document.querySelectorAll('.slide');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const currentSlideEl = document.getElementById('currentSlide');
+            const totalSlidesEl = document.getElementById('totalSlides');
+            const progressBar = document.getElementById('progressBar');
+
+            let currentIdx = 0;
+            const total = slides.length;
+            totalSlidesEl.textContent = total;
+
+            function updateSlides() {
+                slides.forEach((slide, idx) => {
+                    slide.classList.remove('active', 'prev');
+                    if (idx === currentIdx) {
+                        slide.classList.add('active');
+                    } else if (idx < currentIdx) {
+                        slide.classList.add('prev');
+                    }
+                });
+                currentSlideEl.textContent = currentIdx + 1;
+                progressBar.style.width = `${((currentIdx + 1) / total) * 100}%`;
+                prevBtn.disabled = currentIdx === 0;
+                nextBtn.disabled = currentIdx === total - 1;
+            }
+
+            function nextSlide() {
+                if (currentIdx < total - 1) { currentIdx++; updateSlides(); }
+            }
+            function prevSlide() {
+                if (currentIdx > 0) { currentIdx--; updateSlides(); }
+            }
+
+            nextBtn.addEventListener('click', nextSlide);
+            prevBtn.addEventListener('click', prevSlide);
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    nextSlide();
+                } else if (e.key === 'ArrowLeft') {
+                    prevSlide();
+                }
+            });
+
+            // Touch swipe support
+            let touchStartX = 0;
+            document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+            document.addEventListener('touchend', (e) => {
+                const diff = e.changedTouches[0].screenX - touchStartX;
+                if (Math.abs(diff) > 50) {
+                    if (diff < 0) nextSlide();
+                    else prevSlide();
+                }
+            });
+
+            updateSlides();
+        });
+    </script>
+</body>
+</html>
